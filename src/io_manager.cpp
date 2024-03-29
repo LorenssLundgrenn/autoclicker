@@ -6,11 +6,11 @@
 #include "io_manager.hpp"
 #include "instruction.hpp"
 
-void write_instructionset_to_file(const std::string &filename, const std::vector<Instruction> &instructionset) {
+bool write_instructionset_to_file(const std::string &filename, const std::vector<Instruction> &instructionset) {
     std::ofstream file(filename, std::ios::out | std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Failed to open file for writing.\n";
-        return;
+        return 0;
     }
 
     for (const Instruction& instruction : instructionset) {
@@ -18,12 +18,14 @@ void write_instructionset_to_file(const std::string &filename, const std::vector
     }
 
     file.close();
+    return 1;
 }
 
-void read_instructionset_from_file(const std::string &filename, std::vector<Instruction> &instructionset) {
+bool read_instructionset_from_file(const std::string &filename, std::vector<Instruction> &instructionset) {
     std::ifstream file(filename, std::ios::in | std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Failed to open file for reading.\n";
+        return 0;
     }
 
     Instruction instruction_buffer;
@@ -32,6 +34,7 @@ void read_instructionset_from_file(const std::string &filename, std::vector<Inst
     }
 
     file.close();
+    return 1;
 }
 
 void select_file_dialog(std::string &path) {

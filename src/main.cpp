@@ -124,14 +124,17 @@ LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
         }
         else if (pKeyboard->vkCode == '1' && ctrl_pressed && !recording_to_instructionset) {
             if (!active_execution_thread) {
+                std::cout << "executing instructionset...\n";
                 activate_instruction_execution();
             } else {
+                std::cout << "halted instructionset execution\n";
                 deactivate_instruction_execution();
             }
         }
         else if (pKeyboard->vkCode == '2' && ctrl_pressed) {
             recording_to_instructionset = !recording_to_instructionset;
             if (recording_to_instructionset) {
+                std::cout << "recording to buffer...\n";
                 instructionset_buffer = {};
                 first_recorded_click = true;
                 if ( active_execution_thread) {
@@ -139,7 +142,9 @@ LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
                 }
             }
             else if (!recording_to_instructionset) {
+                std::cout << "recording complete, buffer changes merged\n";
                 instructionset = instructionset_buffer;
+                instructionset_buffer = {};
             }
         }
         else if (pKeyboard->vkCode == 'S' && ctrl_pressed) {
@@ -148,7 +153,9 @@ LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
                 std::string path;
                 select_file_dialog(path);
                 if (!path.empty()) {
-                    write_instructionset_to_file(path, instructionset);
+                    if (write_instructionset_to_file(path, instructionset)) {
+                        std::cout << "saved instructionset to " << path << '\n';
+                    }
                 }
                 macros_enabled = true;
             });
@@ -159,14 +166,25 @@ LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
                 std::string path;
                 select_file_dialog(path);
                 if (!path.empty()) {
-                    instructionset = {};
-                    read_instructionset_from_file(path, instructionset);
+                    instructionset_buffer = {};
+                    if (read_instructionset_from_file(path, instructionset_buffer)) {
+                        instructionset = instructionset_buffer;
+                        instructionset_buffer = {};
+                        std::cout << "loaded instructionset from " << path << '\n';
+                    }
                 }
                 macros_enabled = true;
             });
         }
         else if (pKeyboard->vkCode == 'P' && ctrl_pressed) {
+            std::cout << "loaded instructionset:\n";
             print_instructionset(instructionset);
+            std::cout << '\n';
+        }
+        else if (pKeyboard->vkCode == 'B' && ctrl_pressed) {
+            std::cout << "instructionset buffer:\n";
+            print_instructionset(instructionset_buffer);
+            std::cout << '\n';
         }
         else if (pKeyboard->vkCode == 'R' && ctrl_pressed) {
             instructionset = generate_default_instructionset();
@@ -179,14 +197,10 @@ LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
 LRESULT CALLBACK mouse_listener(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION && recording_to_instructionset) {
         if (wParam == WM_LBUTTONDOWN) {
-            std::async(std::launch::async, []() {
-                record_click(true);
-            });
+            record_click(true);
         }
         else if (wParam == WM_RBUTTONDOWN) {
-            std::async(std::launch::async, []() {
-                record_click(false);
-            });
+            record_click(false);
         }
     }
 

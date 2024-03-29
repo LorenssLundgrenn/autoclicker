@@ -13,8 +13,9 @@ SHIFT + ESCAPE: Exit program
 CTRL + 1: run loaded instructionset (activate this macro again to disable playback)
 CTRL + 2: record new instructionset (activate this macro again to disable recording)
 CTRL + S: save the current loaded instructionset to file (make a new .bin file)
-CTRL + L: load a instructionset from file
-CTRL + P: print current instructionset (format: command_type, {pos_x, pos_y}, delay_ms) [DEBUG]
+CTRL + L: load an instructionset from file
+CTRL + P: print current instructionset  [DEBUG]
+CTRL + B: print instructionset buffer   [DEBUG]
 CTRL + R: resets the loaded instructionset to the default hardcoded instructionset
 
 Note: you cannot record and run an instructionset at the same time

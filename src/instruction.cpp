@@ -41,8 +41,24 @@ void click(bool left_click)
 
 void print_instructionset(std::vector<Instruction> instructionset) {
     for (Instruction instruction : instructionset) {
-        std::cout << instruction.op << ", {" << instruction.pos.x << ", " <<
-        instruction.pos.y << "}, " << instruction.delay << '\n';
+        std::string op_code;
+        switch (instruction.op)
+        {
+        case 0:
+            op_code = "WAIT";
+            break;
+        case 1:
+            op_code = "MOVE_CURSOR";
+            break;
+        case 2:
+            op_code = "LEFT_CLICK";
+            break;
+        case 3:
+            op_code = "RIGHT_CLICK";
+            break;
+        }
+        std::cout << op_code << ", {" << instruction.pos.x << "px, " <<
+        instruction.pos.y << "px }, " << instruction.delay << "ms\n";
     }
 }
 
