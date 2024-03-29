@@ -26,40 +26,50 @@ void click(bool left_click)
 
     ZeroMemory(&input, sizeof(INPUT));
     input.type = INPUT_MOUSE;
-    input.mi.dwFlags = ( left_click ?
-        MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_RIGHTDOWN
-    );
+    input.mi.dwFlags = left_click ?
+        MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_RIGHTDOWN;
     SendInput(1, &input, sizeof(INPUT));
 
     ZeroMemory(&input, sizeof(INPUT));
     input.type = INPUT_MOUSE;
-    input.mi.dwFlags = ( left_click ? 
-        MOUSEEVENTF_LEFTUP : MOUSEEVENTF_RIGHTUP
-    );
+    input.mi.dwFlags = left_click ?
+        MOUSEEVENTF_LEFTUP : MOUSEEVENTF_RIGHTUP;
     SendInput(1, &input, sizeof(INPUT));
 }
 
-void print_instructionset(std::vector<Instruction> instructionset) {
-    for (Instruction instruction : instructionset) {
-        std::string op_code;
-        switch (instruction.op)
-        {
-        case 0:
-            op_code = "WAIT";
-            break;
-        case 1:
-            op_code = "MOVE_CURSOR";
-            break;
-        case 2:
-            op_code = "LEFT_CLICK";
-            break;
-        case 3:
-            op_code = "RIGHT_CLICK";
-            break;
-        }
-        std::cout << op_code << ", {" << instruction.pos.x << "px, " <<
-        instruction.pos.y << "px }, " << instruction.delay << "ms\n";
+std::string instruction_to_str(Instruction instruction) {
+    std::string op_code;
+    switch (instruction.op)
+    {
+    case 0:
+        op_code = "WAIT";
+        break;
+    case 1:
+        op_code = "MOVE_CURSOR";
+        break;
+    case 2:
+        op_code = "LEFT_CLICK";
+        break;
+    case 3:
+        op_code = "RIGHT_CLICK";
+        break;
+    default:
+        op_code = "UNKNOWN_OP_CODE";
+        break;
     }
+
+    return (
+        op_code + ", {" + std::to_string(instruction.pos.x) + "px, " + 
+        std::to_string(instruction.pos.y) + "px }, " + std::to_string(instruction.delay) + "ms"
+    ); 
+}
+
+std::string instructionset_to_str(std::vector<Instruction> instructionset) {
+    std::string instructionset_str = "";
+    for (Instruction instruction : instructionset) {
+        instructionset_str += instruction_to_str(instruction) + '\n';
+    }
+    return instructionset_str;
 }
 
 std::vector<Instruction> generate_default_instructionset() {
@@ -92,5 +102,8 @@ void execute_instruction(Instruction instruction) {
     case RIGHT_CLICK:
         click(false);
         break;
+    default:
+        std::cerr << "could not run instruction with"
+        << "unrecognized opcode: " << instruction.op << '\n';
     }
 }

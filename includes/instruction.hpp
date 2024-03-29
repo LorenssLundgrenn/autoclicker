@@ -25,7 +25,8 @@ void wait(u_int ms);
 void move_cursor(POINT cursor_pos);
 void click(bool left_click = true);
 
-void print_instructionset(std::vector<Instruction> instructionset);
+std::string instruction_to_str(Instruction instruction);
+std::string instructionset_to_str(std::vector<Instruction> instructionset);
 std::vector<Instruction> generate_default_instructionset();
 void execute_instruction(Instruction instruction);
 

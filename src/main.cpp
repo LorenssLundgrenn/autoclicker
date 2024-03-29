@@ -8,6 +8,7 @@
 
 #include "io_manager.hpp"
 #include "instruction.hpp"
+#include "print.hpp"
 
 // Define a custom message ID
 #define WM_END_LOOP (WM_USER + 1)
@@ -19,16 +20,16 @@ std::thread execution_thread;
 // active_execution_thread toggles the execution
 // of the execute_instructionset function on a
 // parallell thread, and is governed by the 
-// kb_listener function
+// keyboard_listener function
 bool recording_to_instructionset = false;
 bool first_recorded_click = true;
 bool active_execution_thread = false;
 bool macros_enabled = true;
 
+// forward declarations
 void execute_instructionset();
 LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK mouse_listener(int nCode, WPARAM wParam, LPARAM lParam);
-void record_click(bool left_click);
 
 int main(int argc, char* argv[]) {
     if (argc >= 2) {
@@ -49,6 +50,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    std::thread print_thread(print_worker);
+
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
@@ -56,19 +59,16 @@ int main(int argc, char* argv[]) {
         if (msg.message == WM_END_LOOP) break;
     }
 
+    {
+        std::lock_guard<std::mutex> lock(output_mutex);
+        run_async_printing = false;
+    }
+    output_cv.notify_one();
+    print_thread.join();
+
     UnhookWindowsHookEx(keyboard_hook);
     UnhookWindowsHookEx(mouse_hook);
     return 0;
-}
-
-void activate_instruction_execution() {
-    active_execution_thread = true;
-    execution_thread = std::thread(execute_instructionset);
-}
-
-void deactivate_instruction_execution() {
-    active_execution_thread = false;
-    execution_thread.join();
 }
 
 // continuously execute the currently loaded instructionset
@@ -79,6 +79,106 @@ void execute_instructionset() {
             execute_instruction(instruction);
         }
     }
+}
+
+void activate_instruction_execution() {
+    async_print("executing instructionset...\n");
+    active_execution_thread = true;
+    execution_thread = std::thread(execute_instructionset);
+}
+
+void deactivate_instruction_execution() {
+    active_execution_thread = false;
+    execution_thread.join();
+    async_print("halted instructionset execution\n");
+}
+
+void activate_instruction_recording() {
+    async_print("recording to buffer...\n");
+    if ( active_execution_thread) {
+        deactivate_instruction_execution();
+    }
+    instructionset_buffer = {};
+    first_recorded_click = true;
+    recording_to_instructionset = true;
+}
+
+void deactivate_instruction_recording() {
+    instructionset = instructionset_buffer;
+    instructionset_buffer = {};
+    recording_to_instructionset = false;
+    async_print("recording complete, buffer changes merged\n");
+}
+
+// change the keybinds, they are shit
+LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION && wParam == WM_KEYDOWN && macros_enabled) {
+        KBDLLHOOKSTRUCT* pKeyboard = (KBDLLHOOKSTRUCT*)lParam;
+        bool ctrl_pressed = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+        bool shift_pressed = GetAsyncKeyState(VK_SHIFT) & 0x8000;
+
+        if (pKeyboard->vkCode == VK_ESCAPE && shift_pressed) {
+            if (active_execution_thread) deactivate_instruction_execution();
+            PostMessage(NULL, WM_END_LOOP, 0, 0);
+        }
+        else if (pKeyboard->vkCode == '1' && ctrl_pressed && !recording_to_instructionset) {
+            if (!active_execution_thread) {
+                activate_instruction_execution();
+            } else {
+                deactivate_instruction_execution();
+            }
+        }
+        else if (pKeyboard->vkCode == '2' && ctrl_pressed) {
+            if (recording_to_instructionset) {
+                deactivate_instruction_recording();
+            }
+            else if (!recording_to_instructionset) {
+                activate_instruction_recording();
+            }
+        }
+        else if (pKeyboard->vkCode == 'S' && ctrl_pressed) {
+            macros_enabled = false;
+            input_future = std::async(std::launch::async, [](){
+                std::string path;
+                select_file_dialog(path);
+                if (!path.empty()) {
+                    if (write_instructionset_to_file(path, instructionset)) {
+                        async_print("saved instructionset to " + path + '\n');
+                    }
+                }
+                macros_enabled = true;
+            });
+        }
+        else if (pKeyboard->vkCode == 'L' && ctrl_pressed) {
+            macros_enabled = false;
+            input_future = std::async(std::launch::async, [](){
+                std::string path;
+                select_file_dialog(path);
+                if (!path.empty()) {
+                    instructionset_buffer = {};
+                    if (read_instructionset_from_file(path, instructionset_buffer)) {
+                        instructionset = instructionset_buffer;
+                        instructionset_buffer = {};
+                        async_print("loaded instructionset from " + path + '\n');
+                    }
+                }
+                macros_enabled = true;
+            });
+        }
+        else if (pKeyboard->vkCode == 'P' && ctrl_pressed) {
+            std::string instructionset_str = instructionset_to_str(instructionset);
+            async_print("loaded instructionset:\n" + instructionset_str + '\n');
+        }
+        else if (pKeyboard->vkCode == 'B' && ctrl_pressed) {
+            std::string instructionset_buffer_str = instructionset_to_str(instructionset_buffer);
+            async_print("instructionset buffer:\n" + instructionset_buffer_str + '\n');
+        }
+        else if (pKeyboard->vkCode == 'R' && ctrl_pressed) {
+            instructionset = generate_default_instructionset();
+        }
+    }
+
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
 void record_click(bool left_click) {
@@ -108,90 +208,6 @@ void record_click(bool left_click) {
     instructionset_buffer.push_back(click_instruction);
 
     last_click = current_time;
-}
-
-
-// change the keybinds, they are shit
-LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode == HC_ACTION && wParam == WM_KEYDOWN && macros_enabled) {
-        KBDLLHOOKSTRUCT* pKeyboard = (KBDLLHOOKSTRUCT*)lParam;
-        bool ctrl_pressed = GetAsyncKeyState(VK_CONTROL) & 0x8000;
-        bool shift_pressed = GetAsyncKeyState(VK_SHIFT) & 0x8000;
-
-        if (pKeyboard->vkCode == VK_ESCAPE && shift_pressed) {
-            if (active_execution_thread) deactivate_instruction_execution();
-            PostMessage(NULL, WM_END_LOOP, 0, 0);
-        }
-        else if (pKeyboard->vkCode == '1' && ctrl_pressed && !recording_to_instructionset) {
-            if (!active_execution_thread) {
-                std::cout << "executing instructionset...\n";
-                activate_instruction_execution();
-            } else {
-                std::cout << "halted instructionset execution\n";
-                deactivate_instruction_execution();
-            }
-        }
-        else if (pKeyboard->vkCode == '2' && ctrl_pressed) {
-            recording_to_instructionset = !recording_to_instructionset;
-            if (recording_to_instructionset) {
-                std::cout << "recording to buffer...\n";
-                instructionset_buffer = {};
-                first_recorded_click = true;
-                if ( active_execution_thread) {
-                    deactivate_instruction_execution();
-                }
-            }
-            else if (!recording_to_instructionset) {
-                std::cout << "recording complete, buffer changes merged\n";
-                instructionset = instructionset_buffer;
-                instructionset_buffer = {};
-            }
-        }
-        else if (pKeyboard->vkCode == 'S' && ctrl_pressed) {
-            macros_enabled = false;
-            input_future = std::async(std::launch::async, [](){
-                std::string path;
-                select_file_dialog(path);
-                if (!path.empty()) {
-                    if (write_instructionset_to_file(path, instructionset)) {
-                        std::cout << "saved instructionset to " << path << '\n';
-                    }
-                }
-                macros_enabled = true;
-            });
-        }
-        else if (pKeyboard->vkCode == 'L' && ctrl_pressed) {
-            macros_enabled = false;
-            input_future = std::async(std::launch::async, [](){
-                std::string path;
-                select_file_dialog(path);
-                if (!path.empty()) {
-                    instructionset_buffer = {};
-                    if (read_instructionset_from_file(path, instructionset_buffer)) {
-                        instructionset = instructionset_buffer;
-                        instructionset_buffer = {};
-                        std::cout << "loaded instructionset from " << path << '\n';
-                    }
-                }
-                macros_enabled = true;
-            });
-        }
-        else if (pKeyboard->vkCode == 'P' && ctrl_pressed) {
-            std::cout << "loaded instructionset:\n";
-            print_instructionset(instructionset);
-            std::cout << '\n';
-        }
-        else if (pKeyboard->vkCode == 'B' && ctrl_pressed) {
-            std::cout << "instructionset buffer:\n";
-            print_instructionset(instructionset_buffer);
-            std::cout << '\n';
-        }
-        else if (pKeyboard->vkCode == 'R' && ctrl_pressed) {
-            instructionset = generate_default_instructionset();
-        }
-    }
-
-    return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
 LRESULT CALLBACK mouse_listener(int nCode, WPARAM wParam, LPARAM lParam) {

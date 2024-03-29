@@ -8,6 +8,7 @@ set( SRC
     ${SRC_DIR}/main.cpp
     ${SRC_DIR}/io_manager.cpp
     ${SRC_DIR}/instruction.cpp
+    ${SRC_DIR}/print.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SRC})
