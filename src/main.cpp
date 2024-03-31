@@ -105,11 +105,12 @@ void activate_instruction_recording() {
 }
 
 void deactivate_instruction_recording() {
-    // hack: add a wait command at the end
-    // with delay from last click to end
-    // of recording
+    // hack: remove click and move commands
+    // to add a delay from last click to
+    // the end of the recording
     record_click(true);
-    instructionset_buffer.pop_back();
+    instructionset_buffer.pop_back(); // remove click instruction
+    instructionset_buffer.pop_back(); // remove move instruction
 
     instructionset = instructionset_buffer;
     instructionset_buffer = {};
@@ -126,6 +127,7 @@ LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam) {
 
         if (pKeyboard->vkCode == VK_ESCAPE && shift_pressed) {
             if (active_execution_thread) deactivate_instruction_execution();
+            else if (recording_to_instructionset) deactivate_instruction_recording();
             PostMessage(NULL, WM_END_LOOP, 0, 0);
         }
         else if (pKeyboard->vkCode == '1' && ctrl_pressed && !recording_to_instructionset) {
