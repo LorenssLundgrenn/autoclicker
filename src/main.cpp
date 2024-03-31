@@ -28,6 +28,7 @@ bool macros_enabled = true;
 
 // forward declarations
 void execute_instructionset();
+void record_click(bool left_click);
 LRESULT CALLBACK keyboard_listener(int nCode, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK mouse_listener(int nCode, WPARAM wParam, LPARAM lParam);
 
@@ -104,6 +105,12 @@ void activate_instruction_recording() {
 }
 
 void deactivate_instruction_recording() {
+    // hack: add a wait command at the end
+    // with delay from last click to end
+    // of recording
+    record_click(true);
+    instructionset_buffer.pop_back();
+
     instructionset = instructionset_buffer;
     instructionset_buffer = {};
     recording_to_instructionset = false;
